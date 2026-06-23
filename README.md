@@ -37,17 +37,19 @@ A Grok skill with a silent, cross-platform setup pipeline and a single result ta
 
 Then trigger: `/opencode-grok-composer-setup` or phrases like `opencode grok composer`.
 
-**Run the script directly:**
+**Run the script directly** (launcher auto-picks `python` or `python3`):
 
 ```bash
-python3 scripts/setup-grok-composer.py --lang auto
+# Windows
+scripts\run-setup.cmd --lang auto
+
+# macOS / Linux
+sh scripts/run-setup.sh --lang auto
 ```
 
-For chat-friendly Markdown table output:
+For chat-friendly Markdown table output, add `--table md`.
 
-```bash
-python3 scripts/setup-grok-composer.py --lang auto --table md
-```
+Manual invocation also works (`python` or `python3`, whichever is on PATH).
 
 ### Pipeline
 
@@ -85,6 +87,7 @@ opencode-grok-composer-setup/
 ├── SKILL.md                 # Grok skill instructions (English)
 ├── README.md                # This file (EN / 中文)
 ├── scripts/
+│   ├── run-setup.cmd / run-setup.sh  # Auto-pick python / python3
 │   ├── setup-grok-composer.py   # Main entry
 │   ├── discover-xai-models.py   # Grok → OpenCode model sync
 │   ├── migrate-grok-oauth.py    # OAuth credential migration
@@ -130,17 +133,17 @@ MIT — see [LICENSE](LICENSE).
 
 触发：`/opencode-grok-composer-setup` 或「配置 opencode grok composer」等说法。
 
-**直接运行脚本：**
+**直接运行脚本**（启动器自动选择 `python` 或 `python3`）：
 
 ```bash
-python3 scripts/setup-grok-composer.py --lang auto
+# Windows
+scripts\run-setup.cmd --lang auto
+
+# macOS / Linux
+sh scripts/run-setup.sh --lang auto
 ```
 
-对话里用 Markdown 表：
-
-```bash
-python3 scripts/setup-grok-composer.py --lang auto --table md
-```
+对话里用 Markdown 表：加上 `--table md`。也可手动用 `python` 或 `python3` 调用。
 
 ### 自动流程
 
@@ -178,6 +181,7 @@ opencode-grok-composer-setup/
 ├── SKILL.md                 # Grok Skill 说明（英文）
 ├── README.md                # 本文件（EN / 中文）
 ├── scripts/
+│   ├── run-setup.cmd / run-setup.sh  # 自动选择 python / python3
 │   ├── setup-grok-composer.py   # 主入口
 │   ├── discover-xai-models.py   # Grok → OpenCode 模型同步
 │   ├── migrate-grok-oauth.py    # OAuth 凭证迁移

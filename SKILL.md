@@ -13,11 +13,19 @@ metadata:
 
 ## What the AI should do
 
-Run once, stay silent during execution, and **paste only the script’s final output**:
+Run once with **Python 3.10+**, stay silent during execution, and **paste only the script’s final output**.
+
+Use the launcher (picks `python` or `python3` automatically):
 
 ```bash
-python3 "{SKILL_DIR}/scripts/setup-grok-composer.py" --lang auto
+# Windows
+"{SKILL_DIR}/scripts/run-setup.cmd" --lang auto
+
+# macOS / Linux
+sh "{SKILL_DIR}/scripts/run-setup.sh" --lang auto
 ```
+
+If not using the launcher, call `setup-grok-composer.py` with whichever exists on the host (`python` on Windows; `python3` or `python` on Unix). Sub-scripts reuse the same interpreter via `sys.executable`.
 
 For chat, use a Markdown table: `--table md`
 
