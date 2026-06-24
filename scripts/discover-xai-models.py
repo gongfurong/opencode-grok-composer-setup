@@ -26,6 +26,10 @@ COMPOSER_FAMILY = "composer"
 BUILD_FAMILY = "build"
 GROK_MODELS_CACHE = "models_cache.json"
 GROK_CONFIG = "config.toml"
+# Always register in OpenCode even when absent from Grok CLI catalog (grok-register).
+EXTRA_OPENCODE_MODELS: dict[str, str] = {
+    "composer_standard": "grok-composer-2.5-standard",
+}
 
 
 def home() -> Path:
@@ -242,6 +246,24 @@ def load_opencode_models() -> dict[str, Any]:
     }
 
 
+def resolve_extra_opencode_model(grok_id: str, opencode_ids: list[str]) -> dict[str, Any]:
+    """Register an explicit model ID without composer-family aliasing."""
+    family = family_of(grok_id)
+    if grok_id in opencode_ids:
+        return {
+            "grok_id": grok_id,
+            "opencode_id": grok_id,
+            "match": "exact",
+            "family": family,
+        }
+    return {
+        "grok_id": grok_id,
+        "opencode_id": grok_id,
+        "match": "grok-register",
+        "family": family,
+    }
+
+
 def resolve_grok_to_opencode(grok_id: str, opencode_ids: list[str]) -> dict[str, Any]:
     family = family_of(grok_id)
     if grok_id in opencode_ids:
@@ -300,13 +322,18 @@ def resolve_grok_to_opencode(grok_id: str, opencode_ids: list[str]) -> dict[str,
 
 
 def display_name(model_id: str, grok_name: str | None = None) -> str:
-    if grok_name and grok_name != model_id:
-        return grok_name
     if family_of(model_id) == COMPOSER_FAMILY:
         suffix = model_id.split("grok-composer-", 1)[-1]
         return "Composer " + suffix.replace("-", " ").title()
     if family_of(model_id) == BUILD_FAMILY:
+        if model_id.startswith("grok-build-"):
+            ver = model_id.removeprefix("grok-build-")
+            return f"Grok Build {ver}"
+        if grok_name and grok_name != model_id:
+            return grok_name
         return "Grok Build"
+    if grok_name and grok_name != model_id:
+        return grok_name
     return model_id
 
 
@@ -322,6 +349,9 @@ def sync_plan(grok: dict[str, Any], opencode: dict[str, Any]) -> dict[str, Any]:
         resolved["composer"] = resolve_grok_to_opencode(grok_composer, opencode_ids)
     if grok_build:
         resolved["build"] = resolve_grok_to_opencode(grok_build, opencode_ids)
+
+    for key, grok_id in EXTRA_OPENCODE_MODELS.items():
+        resolved[key] = resolve_extra_opencode_model(grok_id, opencode_ids)
 
     grok_name_by_id = {m["id"]: m.get("name", m["id"]) for m in grok["models"]}
 
@@ -364,6 +394,24 @@ def sync_plan(grok: dict[str, Any], opencode: dict[str, Any]) -> dict[str, Any]:
                 "opencode_id": None,
                 "configured": False,
                 "reason": entry.get("reason"),
+                "match": entry.get("match"),
+            }
+            continue
+
+        if key in EXTRA_OPENCODE_MODELS:
+            is_target_configured = opencode_id in configured
+            if not is_target_configured:
+                changes[f"add_model_{key}"] = opencode_id
+                item_status = "missing"
+            else:
+                item_status = "ok"
+            comparison[key] = {
+                "status": item_status,
+                "grok_id": grok_id,
+                "opencode_id": opencode_id,
+                "opencode_full": entry.get("full"),
+                "previous_opencode_id": opencode_id if opencode_id in configured else None,
+                "configured": is_target_configured,
                 "match": entry.get("match"),
             }
             continue
@@ -432,6 +480,7 @@ def sync_plan(grok: dict[str, Any], opencode: dict[str, Any]) -> dict[str, Any]:
             "selected": {
                 "composer": grok_composer,
                 "build": grok_build,
+                **EXTRA_OPENCODE_MODELS,
             },
         },
         "opencode": {
@@ -459,17 +508,17 @@ def build_outcome(
     comparison = plan.get("comparison") or {}
 
     models_current = []
-    for family in ("composer", "build"):
-        item = comparison.get(family, {})
-        if item.get("opencode_id"):
-            models_current.append(
-                {
-                    "family": family,
-                    "grok_id": item.get("grok_id"),
-                    "opencode_id": item.get("opencode_id"),
-                    "opencode_full": item.get("opencode_full"),
-                }
-            )
+    for family, item in comparison.items():
+        if family == "default_model" or not item.get("opencode_id"):
+            continue
+        models_current.append(
+            {
+                "family": family,
+                "grok_id": item.get("grok_id"),
+                "opencode_id": item.get("opencode_id"),
+                "opencode_full": item.get("opencode_full"),
+            }
+        )
 
     default_cmp = comparison.get("default_model", {})
     upgrades: list[dict[str, Any]] = []
@@ -485,9 +534,9 @@ def build_outcome(
 
     if status == "unresolved":
         unresolved = [
-            comparison[k]
-            for k in ("composer", "build")
-            if comparison.get(k, {}).get("status") == "unresolved"
+            item
+            for item in comparison.values()
+            if isinstance(item, dict) and item.get("status") == "unresolved"
         ]
         return {
             "type": "failed",
@@ -571,7 +620,7 @@ def format_comparison_report(plan: dict[str, Any], i18n: I18n) -> str:
 
     grok = plan.get("grok", {})
     opencode = plan.get("opencode", {})
-    lines.append("[Grok Build]")
+    lines.append("[Grok CLI]")
     lines.append(f"  source:   {grok.get('source')}")
     lines.append(f"  config:   {grok.get('config_path')}")
     lines.append(f"  default:  {grok.get('default')}")
@@ -588,15 +637,14 @@ def format_comparison_report(plan: dict[str, Any], i18n: I18n) -> str:
     lines.append("")
 
     lines.append("[Mapping]")
-    for family in ("composer", "build"):
-        item = plan.get("comparison", {}).get(family, {})
-        if not item:
+    for family, item in (plan.get("comparison") or {}).items():
+        if family == "default_model" or not item:
             continue
         st = item.get("status", "-")
         st_label = i18n.t(f"compare.map.{st}") if st in ("ok", "missing", "unresolved") else st
         lines.append(
             f"  {family}: {item.get('grok_id')} → {item.get('opencode_id')} "
-            f"({i18n.yes_no(item.get('configured'))}, {st_label})"
+            f"({'yes' if item.get('configured') else 'no'}, {st_label})"
         )
     lines.append("")
 
@@ -620,8 +668,7 @@ def apply_plan(
     xai = provider.setdefault(PROVIDER, {})
     models = xai.setdefault("models", {})
 
-    for key in ("composer", "build"):
-        entry = plan.get("resolved", {}).get(key)
+    for entry in (plan.get("resolved") or {}).values():
         if not entry or not entry.get("opencode_id"):
             continue
         model_id = entry["opencode_id"]
@@ -751,6 +798,7 @@ def sync_result_payload(
         "applied": outcome.get("applied", False),
         "outcome": outcome.get("type"),
         "composer": comp.get("composer"),
+        "composer_standard": comp.get("composer_standard"),
         "build": comp.get("build"),
         "error": error,
         "config_path": display_path(plan.get("opencode", {}).get("config_path")),

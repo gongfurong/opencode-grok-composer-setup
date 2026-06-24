@@ -28,6 +28,7 @@ from i18n import (
 )
 
 TARGET_COMPOSER = "grok-composer-2.5-fast"
+TARGET_COMPOSER_STANDARD = "grok-composer-2.5-standard"
 TARGET_BUILD = "grok-build"
 GROK_AUTH_PREFIX = "https://auth.x.ai::"
 CURRENT_I18N: I18n | None = None
@@ -235,6 +236,7 @@ def opencode_xai_model_flags() -> dict[str, bool]:
     ids = list(cfg.get("provider", {}).get("xai", {}).get("models", {}).keys())
     return {
         "composer": any("composer" in m for m in ids),
+        "composer_standard": TARGET_COMPOSER_STANDARD in ids,
         "build": any(m.startswith("grok-build") for m in ids),
     }
 
